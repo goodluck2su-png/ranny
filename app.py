@@ -141,29 +141,48 @@ def display_clickable_table(df):
 
 
 def display_stock_table(df):
-    """종목 테이블 표시 (정보용)"""
+    """종목 테이블 표시 (클릭 가능한 번호 포함)"""
     if df is None or len(df) == 0:
         return
 
-    # 표시할 컬럼 선택
-    display_cols = ["종목명", "현재가", "패턴상태", "신뢰도점수", "머리깊이", "어깨대칭성", "예상수익률"]
-    display_df = df[display_cols].copy()
+    st.markdown("##### 📊 전체 종목 데이터")
+    st.caption("번호를 클릭하면 해당 종목 차트로 이동합니다")
 
-    # 포맷팅
-    display_df["현재가"] = display_df["현재가"].apply(lambda x: f"{int(x):,}원")
-    display_df["신뢰도점수"] = display_df["신뢰도점수"].apply(lambda x: f"{x:.1f}점")
-    display_df["머리깊이"] = display_df["머리깊이"].apply(lambda x: f"{x:.1f}%")
-    display_df["어깨대칭성"] = display_df["어깨대칭성"].apply(lambda x: f"{x:.1f}%")
-    display_df["예상수익률"] = display_df["예상수익률"].apply(lambda x: f"{x:.1f}%")
+    # 헤더
+    header_cols = st.columns([0.5, 1.5, 1, 1, 1, 1, 1, 1])
+    headers = ["#", "종목명", "현재가", "패턴상태", "신뢰도", "머리깊이", "어깨대칭", "예상수익률"]
+    for col, header in zip(header_cols, headers):
+        col.markdown(f"**{header}**")
 
-    # 테이블 표시
-    with st.expander("📊 전체 종목 데이터 보기", expanded=False):
-        st.dataframe(
-            display_df,
-            use_container_width=True,
-            height=400,
-            hide_index=False
-        )
+    # 데이터 행 (최대 20개)
+    for idx in range(min(len(df), 20)):
+        row = df.iloc[idx]
+        cols = st.columns([0.5, 1.5, 1, 1, 1, 1, 1, 1])
+
+        # 번호 버튼 (클릭 가능)
+        with cols[0]:
+            btn_type = "primary" if idx == st.session_state.selected_idx else "secondary"
+            if st.button(f"{idx+1}", key=f"row_btn_{idx}", type=btn_type):
+                st.session_state.selected_idx = idx
+                st.rerun()
+
+        # 데이터 표시
+        cols[1].write(row["종목명"])
+        cols[2].write(f"{int(row['현재가']):,}원")
+
+        # 패턴상태 색상
+        state = row["패턴상태"]
+        if state == "돌파임박":
+            cols[3].success(state)
+        elif state == "넥라인근접":
+            cols[3].warning(state)
+        else:
+            cols[3].info(state)
+
+        cols[4].write(f"{row['신뢰도점수']:.1f}점")
+        cols[5].write(f"{row['머리깊이']:.1f}%")
+        cols[6].write(f"{row['어깨대칭성']:.1f}%")
+        cols[7].write(f"{row['예상수익률']:.1f}%")
 
 
 def display_chart_detail(df, idx):
