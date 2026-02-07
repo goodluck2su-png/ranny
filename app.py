@@ -1,21 +1,14 @@
 """
-역헤드앤숄더 패턴 스캐너 - Streamlit 웹앱
+역헤드앤숄더 패턴 스캐너 - Streamlit 웹앱 (결과 뷰어 전용)
 """
 import streamlit as st
 import pandas as pd
-import sys
-import os
 from datetime import datetime
 from pathlib import Path
-import io
 
-# src 디렉토리를 path에 추가
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
-
-from config import OUTPUT_DIR, CHART_DIR, MIN_HEAD_DEPTH, SHOULDER_PRICE_TOLERANCE
-from data_collector import filter_stocks_fast
-from pattern_detector import scan_stocks
-from chart_visualizer import generate_top_charts, ensure_dirs, draw_pattern_chart
+# 출력 디렉토리 경로 설정
+OUTPUT_DIR = Path(__file__).parent / "output"
+CHART_DIR = OUTPUT_DIR / "charts"
 
 # 페이지 설정
 st.set_page_config(
@@ -30,8 +23,6 @@ if "results" not in st.session_state:
     st.session_state.results = None
 if "selected_idx" not in st.session_state:
     st.session_state.selected_idx = 0
-if "last_scan_time" not in st.session_state:
-    st.session_state.last_scan_time = None
 if "filtered_results" not in st.session_state:
     st.session_state.filtered_results = None
 
@@ -44,34 +35,6 @@ def load_existing_results():
         df["종목코드"] = df["종목코드"].str.zfill(6)
         return df
     return None
-
-
-def run_scanner():
-    """패턴 스캐너 실행"""
-    with st.spinner("종목 필터링 중..."):
-        filtered_stocks = filter_stocks_fast(verbose=False)
-
-    if len(filtered_stocks) == 0:
-        st.error("필터링된 종목이 없습니다.")
-        return None
-
-    with st.spinner(f"{len(filtered_stocks)}개 종목 패턴 스캔 중..."):
-        results = scan_stocks(filtered_stocks, verbose=False)
-
-    if len(results) == 0:
-        st.warning("패턴이 발견된 종목이 없습니다.")
-        return None
-
-    # 결과 저장
-    ensure_dirs()
-    result_path = OUTPUT_DIR / "results.csv"
-    results.to_csv(result_path, index=False, encoding="utf-8-sig")
-
-    # 차트 생성
-    with st.spinner("차트 생성 중..."):
-        generate_top_charts(results)
-
-    return results
 
 
 def apply_filters(df, min_head_depth, min_symmetry, pattern_states):
@@ -94,20 +57,15 @@ def apply_filters(df, min_head_depth, min_symmetry, pattern_states):
     return filtered.reset_index(drop=True)
 
 
-def get_chart_image(ticker: str, name: str, pattern_data: dict) -> Path:
-    """차트 이미지 경로 반환 또는 생성"""
-    ensure_dirs()
+def get_chart_image(ticker: str, name: str) -> Path:
+    """차트 이미지 경로 반환"""
+    if not CHART_DIR.exists():
+        return None
 
     # 기존 차트 파일 찾기
     for chart_file in CHART_DIR.glob(f"*_{name}_{ticker}.png"):
         return chart_file
 
-    # 없으면 생성
-    output_path = CHART_DIR / f"temp_{name}_{ticker}.png"
-    success = draw_pattern_chart(ticker, name, pattern_data, output_path)
-
-    if success:
-        return output_path
     return None
 
 
@@ -128,7 +86,7 @@ def display_stock_table(df):
     display_df["어깨대칭성"] = display_df["어깨대칭성"].apply(lambda x: f"{x:.1f}%")
     display_df["예상수익률"] = display_df["예상수익률"].apply(lambda x: f"{x:.1f}%")
 
-    # 테이블 표시 (클릭 가능)
+    # 테이블 표시
     st.dataframe(
         display_df,
         width="stretch",
@@ -147,7 +105,7 @@ def display_chart_detail(df, idx):
     name = row["종목명"]
 
     # 차트 이미지 가져오기
-    chart_path = get_chart_image(ticker, name, row.to_dict())
+    chart_path = get_chart_image(ticker, name)
 
     col1, col2 = st.columns([2, 1])
 
@@ -156,7 +114,7 @@ def display_chart_detail(df, idx):
         if chart_path and chart_path.exists():
             st.image(str(chart_path), width="stretch")
         else:
-            st.error("차트를 생성할 수 없습니다.")
+            st.warning("차트 이미지가 없습니다. 로컬에서 스캔을 실행해주세요.")
 
     with col2:
         st.subheader("📋 패턴 상세 정보")
@@ -220,7 +178,7 @@ def display_gallery(df, top_n=10):
         col = cols[idx % 2]
 
         with col:
-            chart_path = get_chart_image(ticker, name, row.to_dict())
+            chart_path = get_chart_image(ticker, name)
 
             if chart_path and chart_path.exists():
                 st.markdown(f"**{idx+1}. {name}** ({row['패턴상태']}) - {row['신뢰도점수']:.1f}점")
@@ -240,21 +198,18 @@ with st.sidebar:
 
     st.divider()
 
-    # 스캔 실행 버튼
-    if st.button("🚀 스캔 실행", type="primary", width="stretch"):
-        results = run_scanner()
-        if results is not None:
-            st.session_state.results = results
-            st.session_state.last_scan_time = datetime.now()
-            st.session_state.selected_idx = 0
-            st.rerun()
+    # 안내 문구
+    st.info("📌 **결과 뷰어 전용**\n\n로컬에서 스캔 실행 후 결과를 확인하는 용도입니다.\n\n스캔은 로컬 PC에서 `python main.py` 명령으로 실행하세요.")
+
+    st.divider()
 
     # 기존 결과 로드
-    if st.button("📂 기존 결과 로드", width="stretch"):
+    if st.button("📂 결과 불러오기", type="primary", width="stretch"):
         results = load_existing_results()
         if results is not None:
             st.session_state.results = results
             st.success(f"{len(results)}개 종목 로드됨")
+            st.rerun()
         else:
             st.warning("저장된 결과가 없습니다.")
 
@@ -298,10 +253,7 @@ with st.sidebar:
     st.divider()
 
     # 스캔 정보
-    st.subheader("📊 스캔 정보")
-
-    if st.session_state.last_scan_time:
-        st.write(f"마지막 스캔: {st.session_state.last_scan_time.strftime('%Y-%m-%d %H:%M')}")
+    st.subheader("📊 결과 정보")
 
     if st.session_state.results is not None:
         total = len(st.session_state.results)
@@ -321,7 +273,7 @@ with tab1:
     df = st.session_state.filtered_results
 
     if df is None or len(df) == 0:
-        st.info("👈 사이드바에서 '스캔 실행' 또는 '기존 결과 로드'를 클릭하세요.")
+        st.info("👈 사이드바에서 '결과 불러오기'를 클릭하세요.")
     else:
         # 상단: 종목 테이블
         st.subheader(f"🏆 탐지 종목 ({len(df)}개)")
@@ -366,11 +318,11 @@ with tab2:
     df = st.session_state.filtered_results
 
     if df is None or len(df) == 0:
-        st.info("👈 사이드바에서 '스캔 실행' 또는 '기존 결과 로드'를 클릭하세요.")
+        st.info("👈 사이드바에서 '결과 불러오기'를 클릭하세요.")
     else:
         display_gallery(df)
 
 
 # 푸터
 st.divider()
-st.caption("역헤드앤숄더 패턴 스캐너 v1.0 | KOSPI/KOSDAQ")
+st.caption("역헤드앤숄더 패턴 스캐너 v1.0 | KOSPI/KOSDAQ | 결과 뷰어 전용")

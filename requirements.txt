@@ -1,11 +1,5 @@
 streamlit
 pandas
 numpy
-pykrx
 matplotlib
 mplfinance
-scipy
-tqdm
-requests
-beautifulsoup4
-lxml
