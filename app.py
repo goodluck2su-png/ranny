@@ -97,67 +97,23 @@ def get_chart_image(ticker: str) -> str:
     return None
 
 
-def display_clickable_table(df):
-    """클릭 가능한 종목 테이블 표시"""
-    if df is None or len(df) == 0:
-        st.info("표시할 종목이 없습니다.")
-        return
-
-    # 버튼 그리드로 표시 (5열)
-    st.markdown("##### 종목 클릭 시 차트로 이동")
-
-    # 10개씩 행으로 표시
-    cols_per_row = 5
-    for row_start in range(0, min(len(df), 20), cols_per_row):
-        cols = st.columns(cols_per_row)
-        for i, col in enumerate(cols):
-            idx = row_start + i
-            if idx < len(df):
-                row = df.iloc[idx]
-                name = row["종목명"]
-                state = row["패턴상태"]
-                score = row["신뢰도점수"]
-
-                # 상태별 이모지
-                if state == "돌파임박":
-                    emoji = "🔥"
-                elif state == "넥라인근접":
-                    emoji = "⚡"
-                else:
-                    emoji = "📍"
-
-                # 현재 선택된 종목 강조
-                btn_type = "primary" if idx == st.session_state.selected_idx else "secondary"
-
-                with col:
-                    if st.button(
-                        f"{emoji} {idx+1}. {name}\n{score:.0f}점",
-                        key=f"stock_btn_{idx}",
-                        use_container_width=True,
-                        type=btn_type
-                    ):
-                        st.session_state.selected_idx = idx
-                        st.rerun()
-
-
 def display_stock_table(df):
     """종목 테이블 표시 (클릭 가능한 번호 포함)"""
     if df is None or len(df) == 0:
         return
 
-    st.markdown("##### 📊 전체 종목 데이터")
-    st.caption("번호를 클릭하면 해당 종목 차트로 이동합니다")
+    st.caption("번호(#)를 클릭하면 해당 종목 차트로 이동합니다")
 
     # 헤더
-    header_cols = st.columns([0.5, 1.5, 1, 1, 1, 1, 1, 1])
-    headers = ["#", "종목명", "현재가", "패턴상태", "신뢰도", "머리깊이", "어깨대칭", "예상수익률"]
+    header_cols = st.columns([0.4, 1.5, 1, 0.8, 0.8, 0.8, 0.8, 0.8])
+    headers = ["#", "종목명", "현재가", "상태", "신뢰도", "머리깊이", "대칭성", "수익률"]
     for col, header in zip(header_cols, headers):
         col.markdown(f"**{header}**")
 
     # 데이터 행 (최대 20개)
     for idx in range(min(len(df), 20)):
         row = df.iloc[idx]
-        cols = st.columns([0.5, 1.5, 1, 1, 1, 1, 1, 1])
+        cols = st.columns([0.4, 1.5, 1, 0.8, 0.8, 0.8, 0.8, 0.8])
 
         # 번호 버튼 (클릭 가능)
         with cols[0]:
@@ -170,19 +126,19 @@ def display_stock_table(df):
         cols[1].write(row["종목명"])
         cols[2].write(f"{int(row['현재가']):,}원")
 
-        # 패턴상태 색상
+        # 패턴상태 (이모지로 간결하게)
         state = row["패턴상태"]
         if state == "돌파임박":
-            cols[3].success(state)
+            cols[3].write("🔥")
         elif state == "넥라인근접":
-            cols[3].warning(state)
+            cols[3].write("⚡")
         else:
-            cols[3].info(state)
+            cols[3].write("📍")
 
-        cols[4].write(f"{row['신뢰도점수']:.1f}점")
-        cols[5].write(f"{row['머리깊이']:.1f}%")
-        cols[6].write(f"{row['어깨대칭성']:.1f}%")
-        cols[7].write(f"{row['예상수익률']:.1f}%")
+        cols[4].write(f"{row['신뢰도점수']:.0f}")
+        cols[5].write(f"{row['머리깊이']:.0f}%")
+        cols[6].write(f"{row['어깨대칭성']:.0f}%")
+        cols[7].write(f"{row['예상수익률']:.0f}%")
 
 
 def display_chart_detail(df, idx):
@@ -386,23 +342,19 @@ with tab1:
     if df is None or len(df) == 0:
         st.info("👈 사이드바에서 '결과 새로고침'을 클릭하세요.")
     else:
-        # 상단: 클릭 가능한 종목 버튼
+        # 종목 테이블 (번호 클릭 가능)
         st.subheader(f"🏆 탐지 종목 ({len(df)}개)")
-        display_clickable_table(df)
-
-        # 전체 데이터 테이블 (접기)
         display_stock_table(df)
 
         st.divider()
 
-        # 하단: 차트 상세
-        # 이전/다음 버튼
-        col1, col2, col3 = st.columns([1, 2, 1])
-
+        # 이전/다음 네비게이션
         selected_idx = st.session_state.selected_idx
         if selected_idx >= len(df):
             selected_idx = 0
             st.session_state.selected_idx = 0
+
+        col1, col2, col3 = st.columns([1, 2, 1])
 
         with col1:
             if st.button("⬅️ 이전", use_container_width=True, disabled=(selected_idx == 0)):
@@ -417,7 +369,7 @@ with tab1:
                 st.session_state.selected_idx = min(len(df) - 1, selected_idx + 1)
                 st.rerun()
 
-        # 차트 표시
+        # 선택된 종목 차트 표시
         display_chart_detail(df, selected_idx)
 
 with tab2:
