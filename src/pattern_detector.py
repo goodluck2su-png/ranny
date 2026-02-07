@@ -173,16 +173,6 @@ def validate_inverse_head_and_shoulders(
     # 현재가
     current_price = closes[-1]
 
-    # 패턴 상태 판별
-    head_to_neckline = neckline_price - head_price
-
-    if current_price < head_price + head_to_neckline * 0.3:
-        pattern_state = "바닥형성"
-    elif current_price < neckline_price * 0.95:
-        pattern_state = "넥라인근접"
-    else:
-        pattern_state = "돌파임박"
-
     # 목표가 (넥라인 + 패턴 높이)
     pattern_height = neckline_price - head_price
     target_price = neckline_price + pattern_height
@@ -192,6 +182,20 @@ def validate_inverse_head_and_shoulders(
 
     # 예상 수익률
     expected_return = (target_price - current_price) / current_price * 100
+
+    # 패턴 상태 판별
+    head_to_neckline = neckline_price - head_price
+
+    # 9. 목표가 이미 도달한 경우 제외 (예상수익률 < 0)
+    if current_price >= target_price:
+        return None  # 목표달성 종목 제외
+
+    if current_price < head_price + head_to_neckline * 0.3:
+        pattern_state = "바닥형성"
+    elif current_price < neckline_price * 0.95:
+        pattern_state = "넥라인근접"
+    else:
+        pattern_state = "돌파임박"
 
     # 어깨 대칭성 점수 (100% - 차이%)
     symmetry_score = (1 - shoulder_symmetry) * 100
