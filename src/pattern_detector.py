@@ -13,7 +13,7 @@ from config import (
     EXTREMA_ORDER, SHOULDER_PRICE_TOLERANCE, SHOULDER_TIME_TOLERANCE,
     PRIOR_DECLINE_PCT, MIN_TRADING_VALUE, OHLCV_PERIOD_DAYS,
     VOLUME_BONUS_MULTIPLIER, VOLUME_BONUS_SCORE, PATTERN_STATES,
-    MIN_HEAD_DEPTH
+    MIN_HEAD_DEPTH, NECKLINE_SLOPE_THRESHOLD, NECKLINE_SLOPE_PENALTY
 )
 
 
@@ -159,7 +159,15 @@ def validate_inverse_head_and_shoulders(
     left_neckline_price = highs[left_neckline_idx]
     right_neckline_price = highs[right_neckline_idx]
 
-    # 넥라인 (두 고점의 평균 또는 기울기 고려)
+    # 넥라인 기울기 계산 (우하향 = 음수)
+    # (오른쪽 고점 - 왼쪽 고점) / 왼쪽 고점
+    neckline_slope = (right_neckline_price - left_neckline_price) / left_neckline_price
+
+    # 8. 우하향 넥라인 제외 (-10% 이상 하락 시)
+    if neckline_slope < NECKLINE_SLOPE_THRESHOLD:
+        return None
+
+    # 넥라인 (두 고점의 평균)
     neckline_price = (left_neckline_price + right_neckline_price) / 2
 
     # 현재가
@@ -204,7 +212,8 @@ def validate_inverse_head_and_shoulders(
         "symmetry_score": symmetry_score,
         "head_depth": head_depth,           # 머리 깊이 (0.10 = 10%)
         "time_symmetry": time_ratio,         # 시간 대칭성 (1.0 = 완벽 대칭)
-        "pattern_days": pattern_days
+        "pattern_days": pattern_days,
+        "neckline_slope": neckline_slope     # 넥라인 기울기 (음수 = 우하향)
     }
 
 
@@ -295,7 +304,11 @@ def calculate_reliability_score(pattern: dict, avg_volume: float, current_volume
     if avg_volume > 0 and current_volume > avg_volume * VOLUME_BONUS_MULTIPLIER:
         score += VOLUME_BONUS_SCORE
 
-    return min(score, 100)
+    # 6. 넥라인 기울기 감점 (우하향 시 -5점)
+    if pattern.get("neckline_slope", 0) < 0:
+        score -= NECKLINE_SLOPE_PENALTY
+
+    return max(min(score, 100), 0)  # 0~100 범위
 
 
 def scan_stocks(filtered_stocks: pd.DataFrame, verbose: bool = True, debug_count: int = 0) -> pd.DataFrame:
@@ -359,6 +372,7 @@ def scan_stocks(filtered_stocks: pd.DataFrame, verbose: bool = True, debug_count
             # 신뢰도 점수 구성 요소
             "머리깊이": round(pattern["head_depth"] * 100, 1),  # 퍼센트로 표시
             "시간대칭성": round(pattern["time_symmetry"] * 100, 1),  # 퍼센트로 표시
+            "넥라인기울기": round(pattern["neckline_slope"] * 100, 1),  # 퍼센트로 표시
             # 차트 표시용 인덱스 저장
             "왼쪽어깨idx": pattern["left_shoulder_idx"],
             "머리idx": pattern["head_idx"],

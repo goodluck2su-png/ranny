@@ -28,19 +28,23 @@ if "filtered_results" not in st.session_state:
     st.session_state.filtered_results = None
 if "chart_files" not in st.session_state:
     st.session_state.chart_files = {}
+if "initialized" not in st.session_state:
+    st.session_state.initialized = False
 
 
 def load_chart_files():
-    """차트 파일 목록 캐싱"""
+    """차트 파일 목록 캐싱 (종목코드 기반)"""
     chart_files = {}
     if CHART_DIR.exists():
-        for f in CHART_DIR.glob("*.png"):
-            # 파일명에서 종목코드 추출 (마지막 _XXXXXX.png)
-            name = f.stem  # 확장자 제외
-            parts = name.rsplit("_", 1)
-            if len(parts) == 2:
-                ticker = parts[1]
-                chart_files[ticker] = f
+        # iterdir 사용 (glob보다 안정적)
+        for f in CHART_DIR.iterdir():
+            if f.suffix.lower() == ".png":
+                # 파일명에서 종목코드 추출 (마지막 _XXXXXX.png)
+                name = f.stem  # 확장자 제외
+                parts = name.rsplit("_", 1)
+                if len(parts) == 2 and len(parts[1]) == 6:
+                    ticker = parts[1]
+                    chart_files[ticker] = str(f)  # 문자열로 저장
     return chart_files
 
 
@@ -76,21 +80,19 @@ def apply_filters(df, min_head_depth, min_symmetry, pattern_states):
     return filtered.reset_index(drop=True)
 
 
-def get_chart_image(ticker: str, name: str) -> str:
-    """차트 이미지 경로 반환 (문자열)"""
+def get_chart_image(ticker: str) -> str:
+    """차트 이미지 경로 반환 (종목코드 기반)"""
     # 캐시된 차트 파일에서 찾기
     if ticker in st.session_state.chart_files:
-        return str(st.session_state.chart_files[ticker])
+        path = st.session_state.chart_files[ticker]
+        if os.path.exists(path):
+            return path
 
-    # 직접 검색
+    # 직접 검색 (fallback)
     if CHART_DIR.exists():
-        # 종목코드로 끝나는 파일 찾기
-        for f in CHART_DIR.glob(f"*_{ticker}.png"):
-            return str(f)
-
-        # 종목명_종목코드 패턴으로 찾기
-        for f in CHART_DIR.glob(f"*_{name}_{ticker}.png"):
-            return str(f)
+        for f in CHART_DIR.iterdir():
+            if f.suffix.lower() == ".png" and f.stem.endswith(f"_{ticker}"):
+                return str(f)
 
     return None
 
@@ -131,20 +133,21 @@ def display_chart_detail(df, idx):
     name = row["종목명"]
 
     # 차트 이미지 가져오기
-    chart_path = get_chart_image(ticker, name)
+    chart_path = get_chart_image(ticker)
 
     col1, col2 = st.columns([2, 1])
 
     with col1:
         st.subheader(f"📊 {name} ({ticker})")
-        if chart_path and os.path.exists(chart_path):
+        if chart_path:
             st.image(chart_path, use_container_width=True)
         else:
             st.error(f"🖼️ 차트 이미지 없음")
-            st.caption(f"찾는 파일: *_{name}_{ticker}.png")
-            # 사용 가능한 차트 파일 수 표시
+            st.caption(f"종목코드: {ticker}")
             if st.session_state.chart_files:
                 st.caption(f"사용 가능한 차트: {len(st.session_state.chart_files)}개")
+            else:
+                st.caption("차트 폴더가 비어있거나 찾을 수 없습니다.")
 
     with col2:
         st.subheader("📋 패턴 상세 정보")
@@ -209,11 +212,11 @@ def display_gallery(df, top_n=10):
         col = cols[displayed % 2]
 
         with col:
-            chart_path = get_chart_image(ticker, name)
+            chart_path = get_chart_image(ticker)
 
             st.markdown(f"**{idx+1}. {name}** ({row['패턴상태']}) - {row['신뢰도점수']:.1f}점")
 
-            if chart_path and os.path.exists(chart_path):
+            if chart_path:
                 st.image(chart_path, use_container_width=True)
             else:
                 st.warning(f"🖼️ 이미지 없음 ({ticker})")
@@ -227,6 +230,14 @@ def display_gallery(df, top_n=10):
             displayed += 1
 
 
+# ========== 시작 시 자동 로드 ==========
+if not st.session_state.initialized:
+    results = load_existing_results()
+    if results is not None:
+        st.session_state.results = results
+        st.session_state.initialized = True
+
+
 # ========== 사이드바 ==========
 with st.sidebar:
     st.title("🔍 패턴 스캐너")
@@ -234,12 +245,12 @@ with st.sidebar:
     st.divider()
 
     # 안내 문구
-    st.info("📌 **결과 뷰어 전용**\n\n로컬에서 스캔 실행 후 결과를 확인하는 용도입니다.\n\n스캔은 로컬 PC에서 `python main.py` 명령으로 실행하세요.")
+    st.info("📌 **결과 뷰어 전용**\n\n매일 오후 4:30 자동 업데이트\n\n수동 스캔: 로컬 PC에서 `python main.py`")
 
     st.divider()
 
     # 기존 결과 로드
-    if st.button("📂 결과 불러오기", type="primary", use_container_width=True):
+    if st.button("🔄 결과 새로고침", type="primary", use_container_width=True):
         results = load_existing_results()
         if results is not None:
             st.session_state.results = results
@@ -311,7 +322,7 @@ with tab1:
     df = st.session_state.filtered_results
 
     if df is None or len(df) == 0:
-        st.info("👈 사이드바에서 '결과 불러오기'를 클릭하세요.")
+        st.info("👈 사이드바에서 '결과 새로고침'을 클릭하세요.")
     else:
         # 상단: 종목 테이블
         st.subheader(f"🏆 탐지 종목 ({len(df)}개)")
@@ -321,7 +332,7 @@ with tab1:
             "종목 선택",
             options=range(len(df)),
             format_func=lambda x: f"{x+1}. {df.iloc[x]['종목명']} - {df.iloc[x]['신뢰도점수']:.1f}점 ({df.iloc[x]['패턴상태']})",
-            index=st.session_state.selected_idx
+            index=st.session_state.selected_idx if st.session_state.selected_idx < len(df) else 0
         )
         st.session_state.selected_idx = selected_idx
 
@@ -356,11 +367,11 @@ with tab2:
     df = st.session_state.filtered_results
 
     if df is None or len(df) == 0:
-        st.info("👈 사이드바에서 '결과 불러오기'를 클릭하세요.")
+        st.info("👈 사이드바에서 '결과 새로고침'을 클릭하세요.")
     else:
         display_gallery(df)
 
 
 # 푸터
 st.divider()
-st.caption("역헤드앤숄더 패턴 스캐너 v1.0 | KOSPI/KOSDAQ | 결과 뷰어 전용")
+st.caption("역헤드앤숄더 패턴 스캐너 v1.0 | KOSPI/KOSDAQ | 매일 16:30 자동 업데이트")

@@ -23,6 +23,10 @@ SHOULDER_TIME_TOLERANCE = 0.50     # 어깨 시간 대칭 50% 이내 (수정)
 # 머리 깊이 조건
 MIN_HEAD_DEPTH = 0.10              # 머리가 어깨 평균 대비 최소 10% 낮아야 함
 
+# 넥라인 기울기 조건
+NECKLINE_SLOPE_THRESHOLD = -0.10   # 우하향 넥라인 -10% 이상 하락 시 제외
+NECKLINE_SLOPE_PENALTY = 5         # 우하향 넥라인 감점 (5점)
+
 # 선행 하락
 PRIOR_DECLINE_PCT = -0.15          # 패턴 시작 전 고점 대비 -15%
 
