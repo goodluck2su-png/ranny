@@ -33,10 +33,11 @@ env/
 *.swo
 *~
 
-# 출력 파일
-output/
-*.csv
-!requirements.txt
+# 출력 파일 (로컬 임시 파일만 제외)
+# output/ 폴더는 Streamlit Cloud용으로 포함
+!output/
+!output/**
+*.log
 
 # 로그
 *.log
