@@ -3,11 +3,12 @@
 """
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+import os
 from pathlib import Path
 
-# 출력 디렉토리 경로 설정
-OUTPUT_DIR = Path(__file__).parent / "output"
+# 출력 디렉토리 경로 설정 (절대 경로 사용)
+BASE_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
+OUTPUT_DIR = BASE_DIR / "output"
 CHART_DIR = OUTPUT_DIR / "charts"
 
 # 페이지 설정
@@ -25,6 +26,22 @@ if "selected_idx" not in st.session_state:
     st.session_state.selected_idx = 0
 if "filtered_results" not in st.session_state:
     st.session_state.filtered_results = None
+if "chart_files" not in st.session_state:
+    st.session_state.chart_files = {}
+
+
+def load_chart_files():
+    """차트 파일 목록 캐싱"""
+    chart_files = {}
+    if CHART_DIR.exists():
+        for f in CHART_DIR.glob("*.png"):
+            # 파일명에서 종목코드 추출 (마지막 _XXXXXX.png)
+            name = f.stem  # 확장자 제외
+            parts = name.rsplit("_", 1)
+            if len(parts) == 2:
+                ticker = parts[1]
+                chart_files[ticker] = f
+    return chart_files
 
 
 def load_existing_results():
@@ -33,6 +50,8 @@ def load_existing_results():
     if result_path.exists():
         df = pd.read_csv(result_path, dtype={"종목코드": str})
         df["종목코드"] = df["종목코드"].str.zfill(6)
+        # 차트 파일 목록도 함께 로드
+        st.session_state.chart_files = load_chart_files()
         return df
     return None
 
@@ -57,14 +76,21 @@ def apply_filters(df, min_head_depth, min_symmetry, pattern_states):
     return filtered.reset_index(drop=True)
 
 
-def get_chart_image(ticker: str, name: str) -> Path:
-    """차트 이미지 경로 반환"""
-    if not CHART_DIR.exists():
-        return None
+def get_chart_image(ticker: str, name: str) -> str:
+    """차트 이미지 경로 반환 (문자열)"""
+    # 캐시된 차트 파일에서 찾기
+    if ticker in st.session_state.chart_files:
+        return str(st.session_state.chart_files[ticker])
 
-    # 기존 차트 파일 찾기
-    for chart_file in CHART_DIR.glob(f"*_{name}_{ticker}.png"):
-        return chart_file
+    # 직접 검색
+    if CHART_DIR.exists():
+        # 종목코드로 끝나는 파일 찾기
+        for f in CHART_DIR.glob(f"*_{ticker}.png"):
+            return str(f)
+
+        # 종목명_종목코드 패턴으로 찾기
+        for f in CHART_DIR.glob(f"*_{name}_{ticker}.png"):
+            return str(f)
 
     return None
 
@@ -89,7 +115,7 @@ def display_stock_table(df):
     # 테이블 표시
     st.dataframe(
         display_df,
-        width="stretch",
+        use_container_width=True,
         height=300,
         hide_index=False
     )
@@ -111,10 +137,14 @@ def display_chart_detail(df, idx):
 
     with col1:
         st.subheader(f"📊 {name} ({ticker})")
-        if chart_path and chart_path.exists():
-            st.image(str(chart_path), width="stretch")
+        if chart_path and os.path.exists(chart_path):
+            st.image(chart_path, use_container_width=True)
         else:
-            st.warning("차트 이미지가 없습니다. 로컬에서 스캔을 실행해주세요.")
+            st.error(f"🖼️ 차트 이미지 없음")
+            st.caption(f"찾는 파일: *_{name}_{ticker}.png")
+            # 사용 가능한 차트 파일 수 표시
+            if st.session_state.chart_files:
+                st.caption(f"사용 가능한 차트: {len(st.session_state.chart_files)}개")
 
     with col2:
         st.subheader("📋 패턴 상세 정보")
@@ -171,25 +201,30 @@ def display_gallery(df, top_n=10):
     # 2열 그리드
     cols = st.columns(2)
 
+    displayed = 0
     for idx, row in top_df.iterrows():
         ticker = str(row["종목코드"]).zfill(6)
         name = row["종목명"]
 
-        col = cols[idx % 2]
+        col = cols[displayed % 2]
 
         with col:
             chart_path = get_chart_image(ticker, name)
 
-            if chart_path and chart_path.exists():
-                st.markdown(f"**{idx+1}. {name}** ({row['패턴상태']}) - {row['신뢰도점수']:.1f}점")
-                st.image(str(chart_path), width="stretch")
+            st.markdown(f"**{idx+1}. {name}** ({row['패턴상태']}) - {row['신뢰도점수']:.1f}점")
 
-                # 클릭하면 메인으로 이동
-                if st.button(f"상세보기", key=f"gallery_{idx}"):
-                    st.session_state.selected_idx = idx
-                    st.rerun()
+            if chart_path and os.path.exists(chart_path):
+                st.image(chart_path, use_container_width=True)
+            else:
+                st.warning(f"🖼️ 이미지 없음 ({ticker})")
 
-                st.divider()
+            # 클릭하면 메인으로 이동
+            if st.button(f"상세보기", key=f"gallery_{idx}"):
+                st.session_state.selected_idx = idx
+                st.rerun()
+
+            st.divider()
+            displayed += 1
 
 
 # ========== 사이드바 ==========
@@ -204,11 +239,12 @@ with st.sidebar:
     st.divider()
 
     # 기존 결과 로드
-    if st.button("📂 결과 불러오기", type="primary", width="stretch"):
+    if st.button("📂 결과 불러오기", type="primary", use_container_width=True):
         results = load_existing_results()
         if results is not None:
             st.session_state.results = results
             st.success(f"{len(results)}개 종목 로드됨")
+            st.caption(f"차트 파일: {len(st.session_state.chart_files)}개")
             st.rerun()
         else:
             st.warning("저장된 결과가 없습니다.")
@@ -258,8 +294,10 @@ with st.sidebar:
     if st.session_state.results is not None:
         total = len(st.session_state.results)
         filtered = len(st.session_state.filtered_results) if st.session_state.filtered_results is not None else 0
+        charts = len(st.session_state.chart_files)
         st.write(f"총 탐지: {total}개")
         st.write(f"필터 후: {filtered}개")
+        st.write(f"차트 파일: {charts}개")
 
 
 # ========== 메인 영역 ==========
@@ -297,7 +335,7 @@ with tab1:
         col1, col2, col3 = st.columns([1, 2, 1])
 
         with col1:
-            if st.button("⬅️ 이전", width="stretch", disabled=(selected_idx == 0)):
+            if st.button("⬅️ 이전", use_container_width=True, disabled=(selected_idx == 0)):
                 st.session_state.selected_idx = max(0, selected_idx - 1)
                 st.rerun()
 
@@ -305,7 +343,7 @@ with tab1:
             st.markdown(f"<h4 style='text-align: center;'>{selected_idx + 1} / {len(df)}</h4>", unsafe_allow_html=True)
 
         with col3:
-            if st.button("다음 ➡️", width="stretch", disabled=(selected_idx >= len(df) - 1)):
+            if st.button("다음 ➡️", use_container_width=True, disabled=(selected_idx >= len(df) - 1)):
                 st.session_state.selected_idx = min(len(df) - 1, selected_idx + 1)
                 st.rerun()
 
