@@ -97,6 +97,37 @@ def get_chart_image(ticker: str) -> str:
     return None
 
 
+def display_table_row(df, idx):
+    """테이블 행 1개 표시"""
+    row = df.iloc[idx]
+    cols = st.columns([0.4, 1.5, 1, 0.8, 0.8, 0.8, 0.8, 0.8])
+
+    # 번호 버튼 (클릭 가능)
+    with cols[0]:
+        btn_type = "primary" if idx == st.session_state.selected_idx else "secondary"
+        if st.button(f"{idx+1}", key=f"row_btn_{idx}", type=btn_type):
+            st.session_state.selected_idx = idx
+            st.rerun()
+
+    # 데이터 표시
+    cols[1].write(row["종목명"])
+    cols[2].write(f"{int(row['현재가']):,}원")
+
+    # 패턴상태 (이모지로 간결하게)
+    state = row["패턴상태"]
+    if state == "돌파임박":
+        cols[3].write("🔥")
+    elif state == "넥라인근접":
+        cols[3].write("⚡")
+    else:
+        cols[3].write("📍")
+
+    cols[4].write(f"{row['신뢰도점수']:.0f}")
+    cols[5].write(f"{row['머리깊이']:.0f}%")
+    cols[6].write(f"{row['어깨대칭성']:.0f}%")
+    cols[7].write(f"{row['예상수익률']:.0f}%")
+
+
 def display_stock_table(df):
     """종목 테이블 표시 (클릭 가능한 번호 포함)"""
     if df is None or len(df) == 0:
@@ -110,35 +141,15 @@ def display_stock_table(df):
     for col, header in zip(header_cols, headers):
         col.markdown(f"**{header}**")
 
-    # 데이터 행 (최대 20개)
-    for idx in range(min(len(df), 20)):
-        row = df.iloc[idx]
-        cols = st.columns([0.4, 1.5, 1, 0.8, 0.8, 0.8, 0.8, 0.8])
+    # 상위 10개 표시
+    for idx in range(min(len(df), 10)):
+        display_table_row(df, idx)
 
-        # 번호 버튼 (클릭 가능)
-        with cols[0]:
-            btn_type = "primary" if idx == st.session_state.selected_idx else "secondary"
-            if st.button(f"{idx+1}", key=f"row_btn_{idx}", type=btn_type):
-                st.session_state.selected_idx = idx
-                st.rerun()
-
-        # 데이터 표시
-        cols[1].write(row["종목명"])
-        cols[2].write(f"{int(row['현재가']):,}원")
-
-        # 패턴상태 (이모지로 간결하게)
-        state = row["패턴상태"]
-        if state == "돌파임박":
-            cols[3].write("🔥")
-        elif state == "넥라인근접":
-            cols[3].write("⚡")
-        else:
-            cols[3].write("📍")
-
-        cols[4].write(f"{row['신뢰도점수']:.0f}")
-        cols[5].write(f"{row['머리깊이']:.0f}%")
-        cols[6].write(f"{row['어깨대칭성']:.0f}%")
-        cols[7].write(f"{row['예상수익률']:.0f}%")
+    # 11개 이상이면 나머지는 접기
+    if len(df) > 10:
+        with st.expander(f"➕ 나머지 {len(df) - 10}개 종목 보기"):
+            for idx in range(10, len(df)):
+                display_table_row(df, idx)
 
 
 def display_chart_detail(df, idx):
