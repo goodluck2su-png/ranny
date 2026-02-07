@@ -97,10 +97,52 @@ def get_chart_image(ticker: str) -> str:
     return None
 
 
-def display_stock_table(df):
-    """종목 테이블 표시"""
+def display_clickable_table(df):
+    """클릭 가능한 종목 테이블 표시"""
     if df is None or len(df) == 0:
         st.info("표시할 종목이 없습니다.")
+        return
+
+    # 버튼 그리드로 표시 (5열)
+    st.markdown("##### 종목 클릭 시 차트로 이동")
+
+    # 10개씩 행으로 표시
+    cols_per_row = 5
+    for row_start in range(0, min(len(df), 20), cols_per_row):
+        cols = st.columns(cols_per_row)
+        for i, col in enumerate(cols):
+            idx = row_start + i
+            if idx < len(df):
+                row = df.iloc[idx]
+                name = row["종목명"]
+                state = row["패턴상태"]
+                score = row["신뢰도점수"]
+
+                # 상태별 이모지
+                if state == "돌파임박":
+                    emoji = "🔥"
+                elif state == "넥라인근접":
+                    emoji = "⚡"
+                else:
+                    emoji = "📍"
+
+                # 현재 선택된 종목 강조
+                btn_type = "primary" if idx == st.session_state.selected_idx else "secondary"
+
+                with col:
+                    if st.button(
+                        f"{emoji} {idx+1}. {name}\n{score:.0f}점",
+                        key=f"stock_btn_{idx}",
+                        use_container_width=True,
+                        type=btn_type
+                    ):
+                        st.session_state.selected_idx = idx
+                        st.rerun()
+
+
+def display_stock_table(df):
+    """종목 테이블 표시 (정보용)"""
+    if df is None or len(df) == 0:
         return
 
     # 표시할 컬럼 선택
@@ -115,12 +157,13 @@ def display_stock_table(df):
     display_df["예상수익률"] = display_df["예상수익률"].apply(lambda x: f"{x:.1f}%")
 
     # 테이블 표시
-    st.dataframe(
-        display_df,
-        use_container_width=True,
-        height=300,
-        hide_index=False
-    )
+    with st.expander("📊 전체 종목 데이터 보기", expanded=False):
+        st.dataframe(
+            display_df,
+            use_container_width=True,
+            height=400,
+            hide_index=False
+        )
 
 
 def display_chart_detail(df, idx):
@@ -324,19 +367,11 @@ with tab1:
     if df is None or len(df) == 0:
         st.info("👈 사이드바에서 '결과 새로고침'을 클릭하세요.")
     else:
-        # 상단: 종목 테이블
+        # 상단: 클릭 가능한 종목 버튼
         st.subheader(f"🏆 탐지 종목 ({len(df)}개)")
+        display_clickable_table(df)
 
-        # 종목 선택
-        selected_idx = st.selectbox(
-            "종목 선택",
-            options=range(len(df)),
-            format_func=lambda x: f"{x+1}. {df.iloc[x]['종목명']} - {df.iloc[x]['신뢰도점수']:.1f}점 ({df.iloc[x]['패턴상태']})",
-            index=st.session_state.selected_idx if st.session_state.selected_idx < len(df) else 0
-        )
-        st.session_state.selected_idx = selected_idx
-
-        # 테이블 표시
+        # 전체 데이터 테이블 (접기)
         display_stock_table(df)
 
         st.divider()
@@ -344,6 +379,11 @@ with tab1:
         # 하단: 차트 상세
         # 이전/다음 버튼
         col1, col2, col3 = st.columns([1, 2, 1])
+
+        selected_idx = st.session_state.selected_idx
+        if selected_idx >= len(df):
+            selected_idx = 0
+            st.session_state.selected_idx = 0
 
         with col1:
             if st.button("⬅️ 이전", use_container_width=True, disabled=(selected_idx == 0)):
