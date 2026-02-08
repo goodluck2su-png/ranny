@@ -207,15 +207,32 @@ def display_chart_detail(df, idx):
 
         st.divider()
 
+        # B전략 매매 가이드
+        st.markdown("**💰 B전략 매매 가이드**")
+        current_price = int(row["현재가"])
+        expected_return = row["예상수익률"] / 100  # 퍼센트를 소수로 변환
+        take_profit_price = int(current_price * (1 + expected_return * 0.5))
+        stop_loss_price = int(current_price * 0.9)
+
+        col_tp, col_sl = st.columns(2)
+        with col_tp:
+            st.success(f"🎯 익절가\n**{take_profit_price:,}원**")
+        with col_sl:
+            st.error(f"🛑 손절가\n**{stop_loss_price:,}원**")
+
+        st.caption(f"⏰ 최대 보유: 60일")
+
+        st.divider()
+
         # 가격 정보
         st.markdown("**가격 정보**")
         col_a, col_b = st.columns(2)
         with col_a:
-            st.write(f"현재가: **{int(row['현재가']):,}원**")
+            st.write(f"현재가: **{current_price:,}원**")
             st.write(f"넥라인: {int(row['넥라인가격']):,}원")
         with col_b:
             st.write(f"목표가: **{int(row['목표가']):,}원**")
-            st.write(f"손절가: {int(row['손절가']):,}원")
+            st.write(f"패턴손절: {int(row['손절가']):,}원")
 
         st.divider()
 
@@ -341,6 +358,21 @@ with st.sidebar:
 
     st.divider()
 
+    # 매매 가이드 (B전략)
+    st.subheader("💰 매매 가이드")
+    st.markdown("**전략: B (중립)**")
+
+    col_g1, col_g2 = st.columns(2)
+    with col_g1:
+        st.metric("3년 수익률", "+9.9%")
+    with col_g2:
+        st.metric("승률", "36.1%")
+
+    st.caption("익절: 예상수익률×50% | 손절: -10%")
+    st.caption("최대보유: 60일 | 손익비: 2.8:1")
+
+    st.divider()
+
     # 스캔 정보
     st.subheader("📊 결과 정보")
 
@@ -409,4 +441,4 @@ with tab2:
 
 # 푸터
 st.divider()
-st.caption("역헤드앤숄더 패턴 스캐너 v2.0 (A방식) | KOSPI/KOSDAQ | 매일 16:30 자동 업데이트")
+st.caption("역헤드앤숄더 패턴 스캐너 v2.1 (B전략) | 3년 백테스트 +9.9% | 매일 16:30 자동 업데이트")
