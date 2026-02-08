@@ -100,7 +100,7 @@ def get_chart_image(ticker: str) -> str:
 def display_table_row(df, idx):
     """테이블 행 1개 표시"""
     row = df.iloc[idx]
-    cols = st.columns([0.4, 1.5, 1, 0.8, 0.8, 0.8, 0.8, 0.8])
+    cols = st.columns([0.4, 1.5, 1, 0.8, 0.9, 0.9, 0.8])
 
     # 번호 버튼 (클릭 가능)
     with cols[0]:
@@ -115,17 +115,21 @@ def display_table_row(df, idx):
 
     # 패턴상태 (이모지로 간결하게)
     state = row["패턴상태"]
-    if state == "돌파임박":
-        cols[3].write("🔥")
+    if state == "어깨완성":
+        cols[3].write("🎯")  # 핵심 타겟
+    elif state == "상승중":
+        cols[3].write("📈")
     elif state == "넥라인근접":
         cols[3].write("⚡")
     else:
         cols[3].write("📍")
 
-    cols[4].write(f"{row['신뢰도점수']:.0f}")
-    cols[5].write(f"{row['머리깊이']:.0f}%")
-    cols[6].write(f"{row['어깨대칭성']:.0f}%")
-    cols[7].write(f"{row['예상수익률']:.0f}%")
+    # 어깨대비상승, 넥라인상승여력 표시
+    shoulder_rise = row.get("어깨대비상승", 0)
+    upside = row.get("넥라인상승여력", 0)
+    cols[4].write(f"+{shoulder_rise:.0f}%")
+    cols[5].write(f"**{upside:.0f}%**")
+    cols[6].write(f"{row['예상수익률']:.0f}%")
 
 
 def display_stock_table(df):
@@ -133,11 +137,11 @@ def display_stock_table(df):
     if df is None or len(df) == 0:
         return
 
-    st.caption("번호(#)를 클릭하면 해당 종목 차트로 이동합니다")
+    st.caption("번호(#)를 클릭하면 해당 종목 차트로 이동합니다 | 🎯어깨완성 📈상승중 ⚡넥라인근접")
 
     # 헤더
-    header_cols = st.columns([0.4, 1.5, 1, 0.8, 0.8, 0.8, 0.8, 0.8])
-    headers = ["#", "종목명", "현재가", "상태", "신뢰도", "머리깊이", "대칭성", "수익률"]
+    header_cols = st.columns([0.4, 1.5, 1, 0.8, 0.9, 0.9, 0.8])
+    headers = ["#", "종목명", "현재가", "상태", "어깨↗", "넥라인↗", "수익률"]
     for col, header in zip(header_cols, headers):
         col.markdown(f"**{header}**")
 
@@ -183,14 +187,23 @@ def display_chart_detail(df, idx):
 
         # 패턴 상태 배지
         state = row["패턴상태"]
-        if state == "돌파임박":
-            st.success(f"🔥 {state}")
+        if state == "어깨완성":
+            st.success(f"🎯 {state} (핵심 타겟)")
+        elif state == "상승중":
+            st.info(f"📈 {state}")
         elif state == "넥라인근접":
             st.warning(f"⚡ {state}")
         else:
             st.info(f"📍 {state}")
 
-        st.metric("신뢰도 점수", f"{row['신뢰도점수']:.1f}점")
+        # 핵심 지표: 상승 여력
+        col_m1, col_m2 = st.columns(2)
+        with col_m1:
+            shoulder_rise = row.get("어깨대비상승", 0)
+            st.metric("어깨 대비", f"+{shoulder_rise:.1f}%")
+        with col_m2:
+            upside = row.get("넥라인상승여력", 0)
+            st.metric("넥라인까지", f"+{upside:.1f}%")
 
         st.divider()
 
@@ -208,18 +221,17 @@ def display_chart_detail(df, idx):
 
         # 어깨 가격
         st.markdown("**패턴 구성**")
+        st.write(f"오른쪽어깨: **{int(row['오른쪽어깨가격']):,}원**")
         st.write(f"왼쪽어깨: {int(row['왼쪽어깨가격']):,}원")
         st.write(f"머리: {int(row['머리가격']):,}원")
-        st.write(f"오른쪽어깨: {int(row['오른쪽어깨가격']):,}원")
 
         st.divider()
 
         # 지표
         st.markdown("**신뢰도 지표**")
-        st.write(f"머리 깊이: {row['머리깊이']:.1f}%")
-        st.write(f"어깨 대칭성: {row['어깨대칭성']:.1f}%")
-        st.write(f"시간 대칭성: {row['시간대칭성']:.1f}%")
-        st.write(f"예상 수익률: **{row['예상수익률']:.1f}%**")
+        st.write(f"신뢰도 점수: {row['신뢰도점수']:.0f}점")
+        st.write(f"어깨 대칭성: {row['어깨대칭성']:.0f}%")
+        st.write(f"예상 수익률: **{row['예상수익률']:.0f}%**")
 
 
 def display_gallery(df, top_n=10):
@@ -243,7 +255,8 @@ def display_gallery(df, top_n=10):
         with col:
             chart_path = get_chart_image(ticker)
 
-            st.markdown(f"**{idx+1}. {name}** ({row['패턴상태']}) - {row['신뢰도점수']:.1f}점")
+            upside = row.get("넥라인상승여력", 0)
+            st.markdown(f"**{idx+1}. {name}** ({row['패턴상태']}) - 넥라인까지 +{upside:.0f}%")
 
             if chart_path:
                 st.image(chart_path, use_container_width=True)
@@ -310,11 +323,11 @@ with st.sidebar:
         step=1.0
     )
 
-    pattern_options = ["돌파임박", "넥라인근접", "바닥형성"]
+    pattern_options = ["어깨완성", "상승중", "넥라인근접", "바닥형성"]
     pattern_states = st.multiselect(
         "패턴 상태",
         options=pattern_options,
-        default=pattern_options
+        default=["어깨완성", "상승중"]  # 핵심 타겟만 기본 선택
     )
 
     # 필터 적용
@@ -341,8 +354,8 @@ with st.sidebar:
 
 
 # ========== 메인 영역 ==========
-st.title("📈 역헤드앤숄더 패턴 스캐너")
-st.caption("for ranny")
+st.title("🎯 상승 직전 종목 스캐너")
+st.caption("역헤드앤숄더 패턴 기반 | for ranny")
 
 # 탭 구성
 tab1, tab2 = st.tabs(["📋 종목 리스트", "🖼️ 갤러리"])

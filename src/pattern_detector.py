@@ -13,7 +13,9 @@ from config import (
     EXTREMA_ORDER, SHOULDER_PRICE_TOLERANCE, SHOULDER_TIME_TOLERANCE,
     PRIOR_DECLINE_PCT, MIN_TRADING_VALUE, OHLCV_PERIOD_DAYS,
     VOLUME_BONUS_MULTIPLIER, VOLUME_BONUS_SCORE, PATTERN_STATES,
-    MIN_HEAD_DEPTH, NECKLINE_SLOPE_THRESHOLD, NECKLINE_SLOPE_PENALTY
+    MIN_HEAD_DEPTH, NECKLINE_SLOPE_THRESHOLD, NECKLINE_SLOPE_PENALTY,
+    MIN_UPSIDE_TO_NECKLINE, MIN_RISE_FROM_SHOULDER, MAX_RISE_FROM_SHOULDER,
+    EXCLUDE_NECKLINE_BREAKOUT
 )
 
 
@@ -173,6 +175,26 @@ def validate_inverse_head_and_shoulders(
     # 현재가
     current_price = closes[-1]
 
+    # ========== 상승 직전 종목 필터링 ==========
+
+    # 9. 넥라인 돌파 종목 제외
+    if EXCLUDE_NECKLINE_BREAKOUT and current_price >= neckline_price:
+        return None  # 이미 돌파한 종목 제외
+
+    # 10. 오른쪽 어깨 대비 상승률 계산
+    rise_from_shoulder = (current_price - right_shoulder_price) / right_shoulder_price
+
+    # 11. 오른쪽 어깨 대비 5~15% 상승한 종목만 (어깨 완성 확인)
+    if rise_from_shoulder < MIN_RISE_FROM_SHOULDER:
+        return None  # 아직 어깨 형성 중
+    if rise_from_shoulder > MAX_RISE_FROM_SHOULDER:
+        return None  # 이미 많이 상승함
+
+    # 12. 넥라인까지 최소 20% 상승여력 확인
+    upside_to_neckline = (neckline_price - current_price) / current_price
+    if upside_to_neckline < MIN_UPSIDE_TO_NECKLINE:
+        return None  # 상승 여력 부족
+
     # 목표가 (넥라인 + 패턴 높이)
     pattern_height = neckline_price - head_price
     target_price = neckline_price + pattern_height
@@ -180,22 +202,18 @@ def validate_inverse_head_and_shoulders(
     # 손절가 (머리 저점)
     stop_loss = head_price
 
-    # 예상 수익률
+    # 예상 수익률 (목표가까지)
     expected_return = (target_price - current_price) / current_price * 100
 
-    # 패턴 상태 판별
-    head_to_neckline = neckline_price - head_price
-
-    # 9. 목표가 이미 도달한 경우 제외 (예상수익률 < 0)
-    if current_price >= target_price:
-        return None  # 목표달성 종목 제외
-
-    if current_price < head_price + head_to_neckline * 0.3:
-        pattern_state = "바닥형성"
-    elif current_price < neckline_price * 0.95:
-        pattern_state = "넥라인근접"
+    # 패턴 상태 판별 (새로운 기준)
+    if rise_from_shoulder < 0.05:
+        pattern_state = "바닥형성"      # 오른쪽 어깨 형성 중
+    elif rise_from_shoulder < 0.10:
+        pattern_state = "어깨완성"      # 오른쪽 어깨 완성, 상승 시작 전 ★핵심
+    elif upside_to_neckline > 0.10:
+        pattern_state = "상승중"        # 넥라인까지 상승 진행 중
     else:
-        pattern_state = "돌파임박"
+        pattern_state = "넥라인근접"    # 넥라인 근접
 
     # 어깨 대칭성 점수 (100% - 차이%)
     symmetry_score = (1 - shoulder_symmetry) * 100
@@ -214,10 +232,12 @@ def validate_inverse_head_and_shoulders(
         "stop_loss": stop_loss,
         "expected_return": expected_return,
         "symmetry_score": symmetry_score,
-        "head_depth": head_depth,           # 머리 깊이 (0.10 = 10%)
-        "time_symmetry": time_ratio,         # 시간 대칭성 (1.0 = 완벽 대칭)
+        "head_depth": head_depth,               # 머리 깊이 (0.10 = 10%)
+        "time_symmetry": time_ratio,            # 시간 대칭성 (1.0 = 완벽 대칭)
         "pattern_days": pattern_days,
-        "neckline_slope": neckline_slope     # 넥라인 기울기 (음수 = 우하향)
+        "neckline_slope": neckline_slope,       # 넥라인 기울기 (음수 = 우하향)
+        "rise_from_shoulder": rise_from_shoulder,  # 어깨 대비 상승률
+        "upside_to_neckline": upside_to_neckline   # 넥라인까지 상승여력
     }
 
 
@@ -373,10 +393,13 @@ def scan_stocks(filtered_stocks: pd.DataFrame, verbose: bool = True, debug_count
             "신뢰도점수": round(reliability, 1),
             "일평균거래대금": int(avg_trading_value),
             "패턴기간": pattern["pattern_days"],
+            # 상승 직전 핵심 지표
+            "어깨대비상승": round(pattern["rise_from_shoulder"] * 100, 1),  # 오른쪽 어깨 대비 상승률
+            "넥라인상승여력": round(pattern["upside_to_neckline"] * 100, 1),  # 넥라인까지 상승여력
             # 신뢰도 점수 구성 요소
-            "머리깊이": round(pattern["head_depth"] * 100, 1),  # 퍼센트로 표시
-            "시간대칭성": round(pattern["time_symmetry"] * 100, 1),  # 퍼센트로 표시
-            "넥라인기울기": round(pattern["neckline_slope"] * 100, 1),  # 퍼센트로 표시
+            "머리깊이": round(pattern["head_depth"] * 100, 1),
+            "시간대칭성": round(pattern["time_symmetry"] * 100, 1),
+            "넥라인기울기": round(pattern["neckline_slope"] * 100, 1),
             # 차트 표시용 인덱스 저장
             "왼쪽어깨idx": pattern["left_shoulder_idx"],
             "머리idx": pattern["head_idx"],
@@ -389,7 +412,8 @@ def scan_stocks(filtered_stocks: pd.DataFrame, verbose: bool = True, debug_count
     result_df = pd.DataFrame(results)
 
     if len(result_df) > 0:
-        result_df = result_df.sort_values("신뢰도점수", ascending=False).reset_index(drop=True)
+        # 정렬: 넥라인까지 상승여력 큰 순 (상승 직전 종목 우선)
+        result_df = result_df.sort_values("넥라인상승여력", ascending=False).reset_index(drop=True)
 
     if verbose:
         print(f"\n스캔 통계:")
