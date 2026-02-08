@@ -48,18 +48,16 @@ EXCLUDE_NEW_LISTING_MONTHS = 6     # 신규상장 6개월 이내 제외
 VOLUME_BONUS_MULTIPLIER = 1.5      # 20일 평균 대비 배수
 VOLUME_BONUS_SCORE = 10            # 가점 점수
 
-# ========== 상승 직전 종목 필터 ==========
+# ========== 상승 직전 종목 필터 (A방식: 백테스트 검증) ==========
 MIN_UPSIDE_TO_NECKLINE = 0.20      # 넥라인까지 최소 20% 상승여력
-MIN_RISE_FROM_SHOULDER = 0.05     # 오른쪽 어깨 대비 최소 5% 상승 (어깨 완성 확인)
-MAX_RISE_FROM_SHOULDER = 0.15     # 오른쪽 어깨 대비 최대 15% 상승
-EXCLUDE_NECKLINE_BREAKOUT = True  # 넥라인 돌파 종목 제외
+MAX_RISE_FROM_HEAD = 0.30          # 머리(바닥) 대비 최대 30% 상승
+EXCLUDE_NECKLINE_BREAKOUT = True   # 넥라인 돌파 종목 제외
 
-# ========== 진입 시점 상태 ==========
+# ========== 진입 시점 상태 (A방식) ==========
 PATTERN_STATES = {
-    "FORMING": "바닥형성",           # 오른쪽 어깨 형성 중
-    "SHOULDER_COMPLETE": "어깨완성",  # 오른쪽 어깨 완성, 상승 시작 전 ★핵심
-    "RISING": "상승중",              # 넥라인까지 상승 진행 중
-    "NEAR_NECKLINE": "넥라인근접"     # 넥라인 근접 (제외 대상)
+    "EARLY_ENTRY": "초기진입",       # 머리 대비 15% 이내 상승 ★최우선
+    "RISING": "상승중",              # 머리 대비 15~30% 상승
+    "NEAR_BREAKOUT": "돌파임박"      # 넥라인까지 10% 이내
 }
 
 # ========== 출력 설정 ==========

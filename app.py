@@ -113,21 +113,21 @@ def display_table_row(df, idx):
     cols[1].write(row["종목명"])
     cols[2].write(f"{int(row['현재가']):,}원")
 
-    # 패턴상태 (이모지로 간결하게)
+    # 패턴상태 (이모지로 간결하게) - A방식
     state = row["패턴상태"]
-    if state == "어깨완성":
-        cols[3].write("🎯")  # 핵심 타겟
+    if state == "초기진입":
+        cols[3].write("🎯")  # 최우선 타겟
     elif state == "상승중":
         cols[3].write("📈")
-    elif state == "넥라인근접":
+    elif state == "돌파임박":
         cols[3].write("⚡")
     else:
         cols[3].write("📍")
 
-    # 어깨대비상승, 넥라인상승여력 표시
-    shoulder_rise = row.get("어깨대비상승", 0)
+    # 머리대비상승, 넥라인상승여력 표시
+    head_rise = row.get("머리대비상승", 0)
     upside = row.get("넥라인상승여력", 0)
-    cols[4].write(f"+{shoulder_rise:.0f}%")
+    cols[4].write(f"+{head_rise:.0f}%")
     cols[5].write(f"**{upside:.0f}%**")
     cols[6].write(f"{row['예상수익률']:.0f}%")
 
@@ -137,11 +137,11 @@ def display_stock_table(df):
     if df is None or len(df) == 0:
         return
 
-    st.caption("번호(#)를 클릭하면 해당 종목 차트로 이동합니다 | 🎯어깨완성 📈상승중 ⚡넥라인근접")
+    st.caption("번호(#)를 클릭하면 해당 종목 차트로 이동합니다 | 🎯초기진입 📈상승중 ⚡돌파임박")
 
     # 헤더
     header_cols = st.columns([0.4, 1.5, 1, 0.8, 0.9, 0.9, 0.8])
-    headers = ["#", "종목명", "현재가", "상태", "어깨↗", "넥라인↗", "수익률"]
+    headers = ["#", "종목명", "현재가", "상태", "머리↗", "넥라인↗", "수익률"]
     for col, header in zip(header_cols, headers):
         col.markdown(f"**{header}**")
 
@@ -185,13 +185,13 @@ def display_chart_detail(df, idx):
     with col2:
         st.subheader("📋 패턴 상세 정보")
 
-        # 패턴 상태 배지
+        # 패턴 상태 배지 (A방식)
         state = row["패턴상태"]
-        if state == "어깨완성":
-            st.success(f"🎯 {state} (핵심 타겟)")
+        if state == "초기진입":
+            st.success(f"🎯 {state} (최우선)")
         elif state == "상승중":
             st.info(f"📈 {state}")
-        elif state == "넥라인근접":
+        elif state == "돌파임박":
             st.warning(f"⚡ {state}")
         else:
             st.info(f"📍 {state}")
@@ -199,8 +199,8 @@ def display_chart_detail(df, idx):
         # 핵심 지표: 상승 여력
         col_m1, col_m2 = st.columns(2)
         with col_m1:
-            shoulder_rise = row.get("어깨대비상승", 0)
-            st.metric("어깨 대비", f"+{shoulder_rise:.1f}%")
+            head_rise = row.get("머리대비상승", 0)
+            st.metric("머리 대비", f"+{head_rise:.1f}%")
         with col_m2:
             upside = row.get("넥라인상승여력", 0)
             st.metric("넥라인까지", f"+{upside:.1f}%")
@@ -323,11 +323,11 @@ with st.sidebar:
         step=1.0
     )
 
-    pattern_options = ["어깨완성", "상승중", "넥라인근접", "바닥형성"]
+    pattern_options = ["초기진입", "상승중", "돌파임박"]
     pattern_states = st.multiselect(
         "패턴 상태",
         options=pattern_options,
-        default=["어깨완성", "상승중"]  # 핵심 타겟만 기본 선택
+        default=["초기진입", "상승중"]  # 초기진입 최우선
     )
 
     # 필터 적용
@@ -409,4 +409,4 @@ with tab2:
 
 # 푸터
 st.divider()
-st.caption("역헤드앤숄더 패턴 스캐너 v1.0 | KOSPI/KOSDAQ | 매일 16:30 자동 업데이트")
+st.caption("역헤드앤숄더 패턴 스캐너 v2.0 (A방식) | KOSPI/KOSDAQ | 매일 16:30 자동 업데이트")
